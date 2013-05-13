@@ -15,9 +15,7 @@ void writeImageFile( char pixelBuffer[static WIDTH*HEIGHT], int picNum );
 void drawSpan( char pixelBuffer[static WIDTH*HEIGHT], char lowBits, char highBits, int x, int y );
 
 int main( int argc, char *argv[] )
-{
-  printf( "Hello, cruel world!\n" );
-  
+{ 
   // Argument count check
   if( argc < 3 )
   {
@@ -79,7 +77,6 @@ int main( int argc, char *argv[] )
   char pixelBuffer[WIDTH*HEIGHT];
   for( picNum = 1; picNum <= 30; picNum++ )
   {
-//     printPicInfo( saveBuffer, picNum );
     memset( pixelBuffer, 0x80, WIDTH*HEIGHT*sizeof(pixelBuffer[0]) );
     convert( frameBuffer, saveBuffer, pixelBuffer, picNum );
     writeImageFile( pixelBuffer, picNum );
@@ -96,12 +93,6 @@ int picNum2BaseAddress( int picNum )
 {
   // Picture 1 is at 0x2000, picture 2 is at 0x3000, etc.
   return (picNum + 1) * 0x1000;
-}
-
-void printPicInfo( char buf[static 128*1024], int picNum )
-{
-  int baseAddress = picNum2BaseAddress( picNum );
-  printf( "%02d: %04x: %02x\n", picNum, baseAddress, buf[baseAddress + 0xfb0] );
 }
 
 void convert( char frameBuffer[static 2*16384], char saveBuffer[static 128*1024], char pixelBuffer[static WIDTH*HEIGHT], int picNum )
@@ -131,7 +122,6 @@ void convert( char frameBuffer[static 2*16384], char saveBuffer[static 128*1024]
   // next, apply the frame
   // grab frame number
   char frameNumber = saveBuffer[baseAddress + 0xfb0];
-  printf("%02d: %d\n", picNum, frameNumber);
   
   // validate the frame number.
   // return if it's not valid.
