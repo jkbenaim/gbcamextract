@@ -348,7 +348,23 @@ void writeImageFile( char pixelBuffer[static WIDTH*HEIGHT], int picNum )
   png_set_rows( png_ptr, info_ptr, row_pointers );
   
   // write png
-  png_write_png( png_ptr, info_ptr, 0, NULL );
-  
+//  png_write_png( png_ptr, info_ptr, 0, NULL );
+  png_write_info(png_ptr, info_ptr);
+  png_write_flush(png_ptr);
+  png_write_image(png_ptr, row_pointers);
+
+  png_text source_text;
+  source_text.compression = PNG_TEXT_COMPRESSION_NONE;
+  source_text.key = "Source";
+  source_text.text = "Nintendo Gameboy Camera";
+  png_set_text(png_ptr, info_ptr, &source_text, 1);
+
+  source_text.key = "Software";
+  source_text.text = "gbcamextract";
+  png_set_text(png_ptr, info_ptr, &source_text, 1);
+
+  png_write_end(png_ptr, info_ptr);
+  png_destroy_write_struct(&png_ptr, &info_ptr);
+
   fclose(fp);
 }
