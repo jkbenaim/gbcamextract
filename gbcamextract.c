@@ -138,8 +138,8 @@ void convert( char frameBuffer[BANK_SIZE * 2], char saveBuffer[BUFFER_SIZE], cha
     {
       // for each span
       spanAddress = tileAddress + spanNum*2;
-      lowBits = frameBuffer[spanAddress];
-      highBits = frameBuffer[++spanAddress];
+      lowBits = saveBuffer[spanAddress];
+      highBits = saveBuffer[++spanAddress];
       x = 16 + xTile*8;
       y = 16 + yTile*8 + spanNum;
 //       printf( "tile: %d, x: %d, y: %d\n", tileNum, x, y );
