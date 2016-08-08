@@ -42,11 +42,11 @@ const int HEIGHT = 144;
 const int BUFFER_SIZE = 128*1024;
 
 static inline int picNum2BaseAddress( int picNum );
+static inline int getFrameAddress( int frameNumber );
 void printPicInfo( char buf[], int picNum );
 void convert( char frameBuffer[], char saveBuffer[], char pixelBuffer[], int picNum );
 void writeImageFile( char pixelBuffer[], int picNum );
-void drawTile( char pixelBuffer[], char *buffer, int x, int y );
-void drawSpan( char pixelBuffer[], char lowBits, char highBits, int x, int y );
+void drawSpan( char pixelBuffer[], char *buffer, int x, int y );
 
 int main( int argc, char *argv[] )
 {
@@ -157,7 +157,7 @@ void convert( char frameBuffer[], char saveBuffer[], char pixelBuffer[], int pic
     tile = saveBuffer + baseAddress + yTile*256;
     for( x = 16; x <= 8*17; tile+=16, x+=8 )
     {
-      drawTile( pixelBuffer, tile, x, y );
+      drawSpan( pixelBuffer, tile, x, y );
     }
 
     // Draw the sides of the frame
@@ -167,7 +167,7 @@ void convert( char frameBuffer[], char saveBuffer[], char pixelBuffer[], int pic
       tileNum = frameBuffer[frameAddress + 0x650 + yTile*4 + z];
       tile = frameBuffer + frameAddress + tileNum*16;
       x = ((z&1)?8:0) + ((z&2)?HEIGHT:0);
-      drawTile( pixelBuffer, tile, x, y );
+      drawSpan( pixelBuffer, tile, x, y );
     }
   }
 
@@ -179,36 +179,33 @@ void convert( char frameBuffer[], char saveBuffer[], char pixelBuffer[], int pic
     tile = frameBuffer + tileAddress;
     x = xTile*8;
     y = ((z&1)?8:0) + ((z&2)?128:0);
-    drawTile( pixelBuffer, tile, x, y );
+    drawSpan( pixelBuffer, tile, x, y );
   }
 }
 
-void drawTile( char pixelBuffer[], char *buffer, int x, int y ) {
-  int lowBits, highBits, yMax;
-  for( yMax = y + 8; y < yMax; ++y )
+void drawSpan( char pixelBuffer[], char *buffer, int x, int y ) {
+  const int grays[4] = {0xFF, 0xAA, 0x55, 0x00};
+  int lowBits, highBits, i, color, mask;
+  char *p;
+  p = pixelBuffer + x + 7 + y * WIDTH;
+  for( i = 8; i; --i, p+=WIDTH+8 )
   {
     lowBits = *buffer++;
     highBits = *buffer++;
-    drawSpan( pixelBuffer, lowBits, highBits, x, y );
-  }
-}
+    for( mask=1; mask<256; mask<<=1 )
+      {
+        // Set low bit of color
+        if( lowBits & mask )
+          color = 1;
+        else
+          color = 0;
 
-void drawSpan( char pixelBuffer[], char lowBits, char highBits, int x, int y )
-{
-  const int grays[4] = {0xFF, 0xAA, 0x55, 0x00};
-  int pixelNum;
+        // Set high bit of color
+        if( highBits & mask )
+          color |= 2;
 
-  pixelBuffer += x + WIDTH * y + 7;
-
-  for( pixelNum=0; pixelNum<8; ++pixelNum )
-  {
-    int color = 0;
-    int mask = 1<<pixelNum;
-    if( lowBits & mask )
-      color = 1;
-    if( highBits & mask )
-      color += 2;
-    *pixelBuffer-- = grays[ color ];
+        *p-- = grays[ color ];
+      }
   }
 }
 
