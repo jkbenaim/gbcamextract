@@ -31,19 +31,22 @@
 #include <png.h>
 #include <zlib.h>
 
+#define BANK_SIZE 0x4000
+#define BANK(bank) BANK_SIZE * bank
+
 const int FILE_ERROR = 2;
 const int FILE_SIZE_ERROR = 3;
 
 const int WIDTH = 160;
 const int HEIGHT = 144;
 const int BUFFER_SIZE = 128*1024;
-const int BANK_SIZE = 0x4000;
 
-int picNum2BaseAddress( int picNum );
-void printPicInfo( char buf[BUFFER_SIZE], int picNum );
-void convert( char frameBuffer[BANK_SIZE * 2], char saveBuffer[BUFFER_SIZE], char pixelBuffer[WIDTH*HEIGHT], int picNum );
-void writeImageFile( char pixelBuffer[WIDTH*HEIGHT], int picNum );
-void drawSpan( char pixelBuffer[WIDTH*HEIGHT], char lowBits, char highBits, int x, int y );
+static inline int picNum2BaseAddress( int picNum );
+void printPicInfo( char buf[], int picNum );
+void convert( char frameBuffer[], char saveBuffer[], char pixelBuffer[], int picNum );
+void writeImageFile( char pixelBuffer[], int picNum );
+void drawTile( char pixelBuffer[], char *buffer, int x, int y );
+void drawSpan( char pixelBuffer[], char lowBits, char highBits, int x, int y );
 
 int main( int argc, char *argv[] )
 {
@@ -68,7 +71,7 @@ int main( int argc, char *argv[] )
   // This is used to extract the frame data.
   char frameBuffer[BANK_SIZE * 2];   // two banks
   size_t blocksRead = 0;
-  if( !fseek( file, 0xd0000, SEEK_SET ) )       // beginning of bank 34h
+  if( !fseek( file, BANK(0x34), SEEK_SET ) )       // beginning of bank 34h
     blocksRead = fread( frameBuffer, BANK_SIZE * 2, 1, file );
   if( blocksRead != 1 )
   {
@@ -117,184 +120,87 @@ int main( int argc, char *argv[] )
   return EXIT_SUCCESS;
 }
 
-int picNum2BaseAddress( int picNum )
+static inline int getFrameAddress( int frameNumber ) {
+  int frameAddress;
+
+  // validate the frame number
+  if( frameNumber < 0 || frameNumber >= 18 )
+    frameNumber = 13;
+
+  // calculate the border address.
+  // it can be in one of two banks
+  if( frameNumber < 9 )
+    frameAddress = BANK(0) + frameNumber * 0x688;
+  else
+    frameAddress = BANK(1) + (frameNumber - 9) * 0x688;
+
+  return frameAddress;
+}
+
+static inline int picNum2BaseAddress( int picNum )
 {
   // Picture 1 is at 0x2000, picture 2 is at 0x3000, etc.
   return (picNum + 1) * 0x1000;
 }
 
-void convert( char frameBuffer[BANK_SIZE * 2], char saveBuffer[BUFFER_SIZE], char pixelBuffer[WIDTH*HEIGHT], int picNum )
+void convert( char frameBuffer[], char saveBuffer[], char pixelBuffer[], int picNum )
 {
   int baseAddress = picNum2BaseAddress( picNum );
-  int xTile, yTile, tileAddress, spanAddress, spanNum, tileNum, x, y;
-  char lowBits, highBits;
-  for( yTile = 0; yTile < 14; ++yTile ) for( xTile = 0; xTile < 16; ++xTile )
+  int frameNumber = saveBuffer[baseAddress + 0xfb0];
+  int frameAddress = getFrameAddress( frameNumber );
+  int xTile, yTile, tileAddress, tileNum, x, y, z;
+  char *tile;
+  for( yTile = 0; yTile < 14; ++yTile )
   {
-    // for each tile
-    tileNum = xTile + yTile * 16;
-    tileAddress = baseAddress + tileNum * 16;
-//     printf("\t%x\n", tileAddress );
-    for(spanNum=0; spanNum<8; ++spanNum)
+    y = 16 + yTile*8;
+    x = 16;
+    tile = saveBuffer + baseAddress + yTile*256;
+    for( x = 16; x <= 8*17; tile+=16, x+=8 )
     {
-      // for each span
-      spanAddress = tileAddress + spanNum*2;
-      lowBits = saveBuffer[spanAddress];
-      highBits = saveBuffer[++spanAddress];
-      x = 16 + xTile*8;
-      y = 16 + yTile*8 + spanNum;
-//       printf( "tile: %d, x: %d, y: %d\n", tileNum, x, y );
-      drawSpan( pixelBuffer, lowBits, highBits, x, y );
+      drawTile( pixelBuffer, tile, x, y );
+    }
+
+    // Draw the sides of the frame
+    y = 16 + yTile*8;
+    for ( z=0; z<4; ++z )
+    {
+      tileNum = frameBuffer[frameAddress + 0x650 + yTile*4 + z];
+      tile = frameBuffer + frameAddress + tileNum*16;
+      x = ((z&1)?8:0) + ((z&2)?HEIGHT:0);
+      drawTile( pixelBuffer, tile, x, y );
     }
   }
 
-  // next, apply the frame
-  // grab frame number
-  char frameNumber = saveBuffer[baseAddress + 0xfb0];
-
-  // validate the frame number.
-  // return if it's not valid.
-  if( frameNumber < 0 || frameNumber >= 18 )
-    return;
-
-  // calculate the border address.
-  // it can be in one of two banks
-  int frameAddress = 0;
-  if( frameNumber < 9 )
-    frameAddress = frameNumber * 0x688;
-  else if( frameNumber < 18 )
-    frameAddress = 0x4000 + (frameNumber - 9) * 0x688;
-
-  // apply the top of the frame
-  // iterate over each tile in the tilemap
-  // top row
-  for( xTile=0; xTile<20; ++xTile )
+  // Draw the top and bottom of the frame
+  for( xTile=0; xTile<20; ++xTile ) for ( z=0; z<4; ++z )
   {
-    tileNum = frameBuffer[frameAddress + 0x600 + xTile];
+    tileNum = frameBuffer[frameAddress + 0x600 + xTile + 0x14*z];
     tileAddress = frameAddress + tileNum*16;
-    // draw the tile
-    for( spanNum = 0; spanNum<8; ++spanNum )
-    {
-      spanAddress = tileAddress + 2*spanNum;
-      lowBits = frameBuffer[spanAddress];
-      highBits = frameBuffer[++spanAddress];
-      x = xTile*8;
-      y = 0 + spanNum;
-      drawSpan( pixelBuffer, lowBits, highBits, x, y );
-    }
-  }
-  // second row
-  for( xTile=0; xTile<20; ++xTile )
-  {
-    tileNum = frameBuffer[frameAddress + 0x614 + xTile];
-    tileAddress = frameAddress + tileNum*16;
-    // draw the tile
-    for( spanNum = 0; spanNum<8; ++spanNum )
-    {
-      spanAddress = tileAddress + 2*spanNum;
-      lowBits = frameBuffer[spanAddress];
-      highBits = frameBuffer[++spanAddress];
-      x = xTile*8;
-      y = 8 + spanNum;
-      drawSpan( pixelBuffer, lowBits, highBits, x, y );
-    }
-  }
-  // second-from-bottom row
-  for( xTile=0; xTile<20; ++xTile )
-  {
-    tileNum = frameBuffer[frameAddress + 0x628 + xTile];
-    tileAddress = frameAddress + tileNum*16;
-    // draw the tile
-    for( spanNum = 0; spanNum<8; ++spanNum )
-    {
-      spanAddress = tileAddress + 2*spanNum;
-      lowBits = frameBuffer[spanAddress];
-      highBits = frameBuffer[spanAddress+1];
-      x = xTile*8;
-      y = 128 + spanNum;
-      drawSpan( pixelBuffer, lowBits, highBits, x, y );
-    }
-  }
-  // bottom row
-  for( xTile=0; xTile<20; ++xTile )
-  {
-    tileNum = frameBuffer[frameAddress + 0x63c + xTile];
-    tileAddress = frameAddress + tileNum*16;
-    // draw the tile
-    for( spanNum = 0; spanNum<8; ++spanNum )
-    {
-      spanAddress = tileAddress + 2*spanNum;
-      lowBits = frameBuffer[spanAddress];
-      highBits = frameBuffer[++spanAddress];
-      x = xTile*8;
-      y = 136 + spanNum;
-      drawSpan( pixelBuffer, lowBits, highBits, x, y );
-    }
-  }
-
-  // sides
-  for( yTile = 0; yTile<14; ++yTile )
-  {
-    // leftmost tile
-    tileNum = frameBuffer[frameAddress + 0x650 + yTile*4 + 0];
-    tileAddress = frameAddress + tileNum*16;
-    // draw the tile
-    for( spanNum = 0; spanNum<8; spanNum++ )
-    {
-      spanAddress = tileAddress + 2*spanNum;
-      lowBits = frameBuffer[spanAddress];
-      highBits = frameBuffer[++spanAddress];
-      x = 0;
-      y = 16 + yTile*8 + spanNum;
-      drawSpan( pixelBuffer, lowBits, highBits, x, y );
-    }
-    // second-from-leftmost tile
-    tileNum = frameBuffer[frameAddress + 0x650 + yTile*4 + 1];
-    tileAddress = frameAddress + tileNum*16;
-    // draw the tile
-    for( spanNum = 0; spanNum<8; ++spanNum )
-    {
-      spanAddress = tileAddress + 2*spanNum;
-      lowBits = frameBuffer[spanAddress];
-      highBits = frameBuffer[++spanAddress];
-      x = 8;
-      y = 16 + yTile*8 + spanNum;
-      drawSpan( pixelBuffer, lowBits, highBits, x, y );
-    }
-    // second-from-rightmost tile
-    tileNum = frameBuffer[frameAddress + 0x650 + yTile*4 + 2];
-    tileAddress = frameAddress + tileNum*16;
-    // draw the tile
-    for( spanNum = 0; spanNum<8; ++spanNum )
-    {
-      spanAddress = tileAddress + 2*spanNum;
-      lowBits = frameBuffer[spanAddress];
-      highBits = frameBuffer[++spanAddress];
-      x = 144;
-      y = 16 + yTile*8 + spanNum;
-      drawSpan( pixelBuffer, lowBits, highBits, x, y );
-    }
-    // rightmost tile
-    tileNum = frameBuffer[frameAddress + 0x650 + yTile*4 + 3];
-    tileAddress = frameAddress + tileNum*16;
-    // draw the tile
-    for( spanNum = 0; spanNum<8; ++spanNum )
-    {
-      spanAddress = tileAddress + 2*spanNum;
-      lowBits = frameBuffer[spanAddress];
-      highBits = frameBuffer[++spanAddress];
-      x = 152;
-      y = 16 + yTile*8 + spanNum;
-      drawSpan( pixelBuffer, lowBits, highBits, x, y );
-    }
+    tile = frameBuffer + tileAddress;
+    x = xTile*8;
+    y = ((z&1)?8:0) + ((z&2)?128:0);
+    drawTile( pixelBuffer, tile, x, y );
   }
 }
 
-void drawSpan( char pixelBuffer[WIDTH*HEIGHT], char lowBits, char highBits, int x, int y )
+void drawTile( char pixelBuffer[], char *buffer, int x, int y ) {
+  int lowBits, highBits, yMax;
+  for( yMax = y + 8; y < yMax; ++y )
+  {
+    lowBits = *buffer++;
+    highBits = *buffer++;
+    drawSpan( pixelBuffer, lowBits, highBits, x, y );
+  }
+}
+
+void drawSpan( char pixelBuffer[], char lowBits, char highBits, int x, int y )
 {
+  const int grays[4] = {0xFF, 0xAA, 0x55, 0x00};
   int pixelNum;
-  char spanColors[8];
-  int grays[4] = {0xFF, 0xAA, 0x55, 0x00};
-  for(pixelNum=0; pixelNum<8; ++pixelNum++)
+
+  pixelBuffer += x + WIDTH * y + 7;
+
+  for( pixelNum=0; pixelNum<8; ++pixelNum )
   {
     int color = 0;
     int mask = 1<<pixelNum;
@@ -302,20 +208,15 @@ void drawSpan( char pixelBuffer[WIDTH*HEIGHT], char lowBits, char highBits, int 
       color = 1;
     if( highBits & mask )
       color += 2;
-    spanColors[7-pixelNum] = grays[ color ];
-  }
-  for(pixelNum=0; pixelNum<8; ++pixelNum)
-  {
-    // copy span to pixel buffer
-    int pixelAddress = x + 160 * y + pixelNum;
-    pixelBuffer[pixelAddress] = spanColors[pixelNum];
+    *pixelBuffer-- = grays[ color ];
   }
 }
 
-void writeImageFile( char pixelBuffer[WIDTH*HEIGHT], int picNum )
+void writeImageFile( char pixelBuffer[], int picNum )
 {
+  int y;
   // open file
-  char name[50];
+  char name[7];
   sprintf(name, "%d.png", picNum );
   FILE *fp = fopen( name, "wb" );
 
@@ -323,14 +224,14 @@ void writeImageFile( char pixelBuffer[WIDTH*HEIGHT], int picNum )
     (PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
 
   if (!png_ptr)
-      return;
+      exit(EXIT_FAILURE);
 
   png_infop info_ptr = png_create_info_struct(png_ptr);
   if (!info_ptr)
   {
       png_destroy_write_struct(&png_ptr,
           (png_infopp)NULL);
-      return;
+      exit(EXIT_FAILURE);
   }
 
     // init output
@@ -341,8 +242,7 @@ void writeImageFile( char pixelBuffer[WIDTH*HEIGHT], int picNum )
                 PNG_COLOR_TYPE_GRAY, PNG_INTERLACE_NONE, PNG_COMPRESSION_TYPE_DEFAULT, PNG_FILTER_TYPE_DEFAULT );
 
   // setup row pointers
-  png_bytep * row_pointers = (png_bytep*) malloc(sizeof(png_bytep) * HEIGHT);
-  int y;
+  png_bytep * row_pointers = malloc(sizeof(png_bytep) * HEIGHT);
   for(y=0; y<HEIGHT; ++y)
     row_pointers[y] = (png_byte *)(pixelBuffer + WIDTH * y);
 
