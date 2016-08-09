@@ -187,17 +187,17 @@ void convert( char frameBuffer[], char saveBuffer[], char pixelBuffer[], int pic
 }
 
 void drawSpan( char pixelBuffer[], char *buffer, int x, int y ) {
-  unsigned char lowBits, highBits, i;
-  char *p;
-  p = pixelBuffer + (x/4) + 1 + y * ROW_SIZE;
-  for( i = 8; i; --i, p+=ROW_SIZE+2 )
+  unsigned char lowBits, highBits;
+  char *p, *q;
+  p = pixelBuffer + (x/4) + y * ROW_SIZE;
+  for( q = p + ROW_SIZE * 8; p<q; p+=ROW_SIZE )
   {
     lowBits = ~*buffer++;
     highBits = ~*buffer++;
-    *p-- = (lowBits & 1) | ((highBits & 1) << 1) | ((lowBits & 2) << 1) | ((highBits & 2) << 2) | ((lowBits & 4) << 2)  | ((highBits & 4) << 3) | ((lowBits & 8) << 3) | ((highBits & 8) << 4);
+    p[1] = (lowBits & 1) | ((highBits & 1) << 1) | ((lowBits & 2) << 1) | ((highBits & 2) << 2) | ((lowBits & 4) << 2)  | ((highBits & 4) << 3) | ((lowBits & 8) << 3) | ((highBits & 8) << 4);
     lowBits >>= 4;
     highBits >>= 4;
-    *p-- = (lowBits & 1) | ((highBits & 1) << 1) | ((lowBits & 2) << 1) | ((highBits & 2) << 2) | ((lowBits & 4) << 2)  | ((highBits & 4) << 3) | ((lowBits & 8) << 3) | ((highBits & 8) << 4);
+    p[0] = (lowBits & 1) | ((highBits & 1) << 1) | ((lowBits & 2) << 1) | ((highBits & 2) << 2) | ((lowBits & 4) << 2)  | ((highBits & 4) << 3) | ((lowBits & 8) << 3) | ((highBits & 8) << 4);
   }
 }
 
