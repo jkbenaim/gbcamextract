@@ -225,6 +225,8 @@ void writeImageFile( char pixelBuffer[], int picNum )
 
     // init output
   png_init_io( png_ptr, fp );
+  png_set_compression_level(png_ptr, Z_BEST_COMPRESSION);
+  png_set_compression_mem_level(png_ptr, 9);
 
   // set header info
   png_set_IHDR( png_ptr, info_ptr, WIDTH, HEIGHT, 2,
