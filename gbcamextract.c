@@ -38,6 +38,7 @@ const int FILE_ERROR = 2;
 const int FILE_SIZE_ERROR = 3;
 
 const int WIDTH = 160;
+const int ROW_SIZE = WIDTH / 4; // 2 bits per pixel means 4 pixels per byte
 const int HEIGHT = 144;
 const int BUFFER_SIZE = 128*1024;
 
@@ -111,7 +112,7 @@ int main( int argc, char *argv[] )
 
   // convert
   int picNum;
-  char pixelBuffer[WIDTH*HEIGHT];
+  char pixelBuffer[ROW_SIZE*HEIGHT];
   for( picNum = 1; picNum <= 30; ++picNum )
   {
     convert( frameBuffer, saveBuffer, pixelBuffer, picNum );
@@ -188,8 +189,8 @@ void convert( char frameBuffer[], char saveBuffer[], char pixelBuffer[], int pic
 void drawSpan( char pixelBuffer[], char *buffer, int x, int y ) {
   unsigned char lowBits, highBits, i;
   char *p;
-  p = pixelBuffer + (x/4) + 1 + y * (WIDTH/4);
-  for( i = 8; i; --i, p+=(WIDTH/4)+2 )
+  p = pixelBuffer + (x/4) + 1 + y * ROW_SIZE;
+  for( i = 8; i; --i, p+=ROW_SIZE+2 )
   {
     lowBits = ~*buffer++;
     highBits = ~*buffer++;
@@ -232,7 +233,7 @@ void writeImageFile( char pixelBuffer[], int picNum )
   // setup row pointers
   png_bytep * row_pointers = malloc(sizeof(png_bytep) * HEIGHT);
   for(y=0; y<HEIGHT; ++y)
-    row_pointers[y] = (png_byte *)(pixelBuffer + (WIDTH/4) * y);
+    row_pointers[y] = (png_byte *)(pixelBuffer + ROW_SIZE * y);
 
   // set rows
   png_set_rows( png_ptr, info_ptr, row_pointers );
