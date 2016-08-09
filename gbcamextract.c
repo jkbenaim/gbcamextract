@@ -47,9 +47,12 @@ void printPicInfo( char buf[], int picNum );
 void convert( char frameBuffer[], char saveBuffer[], char pixelBuffer[], int picNum );
 void writeImageFile( char pixelBuffer[], int picNum );
 void drawSpan( char pixelBuffer[], char *buffer, int x, int y );
+void readData( char *fileName, char *buffer, int offset );
 
 int main( int argc, char *argv[] )
 {
+  FILE* file;
+  size_t blocksRead;
   // Argument count check
   if( argc < 3 )
   {
@@ -59,7 +62,7 @@ int main( int argc, char *argv[] )
 
 
   // Open rom file
-  FILE* file = fopen( argv[1], "r" );
+  file = fopen( argv[1], "r" );
   if( file == NULL )
   {
     // Failure while attempting to open the file.
@@ -70,7 +73,7 @@ int main( int argc, char *argv[] )
   // Read the rom file into memory.
   // This is used to extract the frame data.
   char frameBuffer[BANK_SIZE * 2];   // two banks
-  size_t blocksRead = 0;
+  blocksRead = 0;
   if( !fseek( file, BANK(0x34), SEEK_SET ) )       // beginning of bank 34h
     blocksRead = fread( frameBuffer, BANK_SIZE * 2, 1, file );
   if( blocksRead != 1 )
@@ -111,7 +114,6 @@ int main( int argc, char *argv[] )
   char pixelBuffer[WIDTH*HEIGHT];
   for( picNum = 1; picNum <= 30; ++picNum )
   {
-    memset( pixelBuffer, 0x80, WIDTH*HEIGHT*sizeof(pixelBuffer[0]) );
     convert( frameBuffer, saveBuffer, pixelBuffer, picNum );
     writeImageFile( pixelBuffer, picNum );
   }
@@ -184,28 +186,17 @@ void convert( char frameBuffer[], char saveBuffer[], char pixelBuffer[], int pic
 }
 
 void drawSpan( char pixelBuffer[], char *buffer, int x, int y ) {
-  const int grays[4] = {0xFF, 0xAA, 0x55, 0x00};
-  int lowBits, highBits, i, color, mask;
+  unsigned char lowBits, highBits, i;
   char *p;
-  p = pixelBuffer + x + 7 + y * WIDTH;
-  for( i = 8; i; --i, p+=WIDTH+8 )
+  p = pixelBuffer + (x/4) + 1 + y * (WIDTH/4);
+  for( i = 8; i; --i, p+=(WIDTH/4)+2 )
   {
-    lowBits = *buffer++;
-    highBits = *buffer++;
-    for( mask=1; mask<256; mask<<=1 )
-      {
-        // Set low bit of color
-        if( lowBits & mask )
-          color = 1;
-        else
-          color = 0;
-
-        // Set high bit of color
-        if( highBits & mask )
-          color |= 2;
-
-        *p-- = grays[ color ];
-      }
+    lowBits = ~*buffer++;
+    highBits = ~*buffer++;
+    *p-- = (lowBits & 1) | ((highBits & 1) << 1) | ((lowBits & 2) << 1) | ((highBits & 2) << 2) | ((lowBits & 4) << 2)  | ((highBits & 4) << 3) | ((lowBits & 8) << 3) | ((highBits & 8) << 4);
+    lowBits >>= 4;
+    highBits >>= 4;
+    *p-- = (lowBits & 1) | ((highBits & 1) << 1) | ((lowBits & 2) << 1) | ((highBits & 2) << 2) | ((lowBits & 4) << 2)  | ((highBits & 4) << 3) | ((lowBits & 8) << 3) | ((highBits & 8) << 4);
   }
 }
 
@@ -235,13 +226,13 @@ void writeImageFile( char pixelBuffer[], int picNum )
   png_init_io( png_ptr, fp );
 
   // set header info
-  png_set_IHDR( png_ptr, info_ptr, WIDTH, HEIGHT, 8,
+  png_set_IHDR( png_ptr, info_ptr, WIDTH, HEIGHT, 2,
                 PNG_COLOR_TYPE_GRAY, PNG_INTERLACE_NONE, PNG_COMPRESSION_TYPE_DEFAULT, PNG_FILTER_TYPE_DEFAULT );
 
   // setup row pointers
   png_bytep * row_pointers = malloc(sizeof(png_bytep) * HEIGHT);
   for(y=0; y<HEIGHT; ++y)
-    row_pointers[y] = (png_byte *)(pixelBuffer + WIDTH * y);
+    row_pointers[y] = (png_byte *)(pixelBuffer + (WIDTH/4) * y);
 
   // set rows
   png_set_rows( png_ptr, info_ptr, row_pointers );
