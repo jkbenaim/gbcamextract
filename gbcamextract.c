@@ -45,7 +45,6 @@ const int BUFFER_SIZE = 128*1024;
 static inline int picNum2BaseAddress( int picNum );
 static inline int getFrameAddress( int frameNumber );
 static inline unsigned int interleaveBytes( unsigned char low, unsigned char high );
-void printPicInfo( char buf[], int picNum );
 void convert( char frameBuffer[], char saveBuffer[], char pixelBuffer[], int picNum );
 void writeImageFile( char pixelBuffer[], int picNum );
 void drawSpan( char pixelBuffer[], char *buffer, int x, int y );
