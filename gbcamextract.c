@@ -38,7 +38,7 @@ const int FILE_ERROR = 2;
 const int FILE_SIZE_ERROR = 3;
 
 const int WIDTH = 160;
-const int ROW_SIZE = WIDTH / 4; // 2 bits per pixel means 4 pixels per byte
+const int ROW_SIZE = 40; // WIDTH/4: 2 bits per pixel means 4 pixels per byte
 const int HEIGHT = 144;
 const int BUFFER_SIZE = 128*1024;
 
