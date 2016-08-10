@@ -11,6 +11,8 @@ gbcamextract camerarom.gb save.sav
 
 This will produce 30 PNG files containing your photos.
 
+`black.gb` has been provided, which will output a black border for all photos, regardless of which border may have been originally set.
+
 
 ## Install
 
