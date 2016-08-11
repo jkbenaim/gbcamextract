@@ -44,7 +44,7 @@ const int BUFFER_SIZE = 128*1024;
 
 static inline int picNum2BaseAddress( int picNum );
 static inline int getFrameAddress( int frameNumber );
-void printPicInfo( char buf[], int picNum );
+static inline unsigned int interleaveBytes( unsigned char low, unsigned char high );
 void convert( char frameBuffer[], char saveBuffer[], char pixelBuffer[], int picNum );
 void writeImageFile( char pixelBuffer[], int picNum );
 void drawSpan( char pixelBuffer[], char *buffer, int x, int y );
@@ -186,7 +186,39 @@ void convert( char frameBuffer[], char saveBuffer[], char pixelBuffer[], int pic
   }
 }
 
+static inline unsigned int interleaveBytes( unsigned char low, unsigned char high )
+{
+    int result;
+    // We recieve two vars, each 8 bits in length
+    // We return one int, 16 bits in length, that contains the two vars interleaved
+    // example:
+    //    low = 00000000
+    //   high = 11111111
+    // result = 10101010 10101010
+
+    result  = low & 1;
+    result |= (high & 1) << 1;
+    result |= (low & 2) << 1;
+    result |= (high & 2) << 2;
+    result |= (low & 4) << 2;
+    result |= (high & 4) << 3;
+    result |= (low & 8) << 3;
+    result |= (high & 8) << 4;
+
+    result |= (low & 16) << 4;
+    result |= (high & 16) << 5;
+    result |= (low & 32) << 5;
+    result |= (high & 32) << 6;
+    result |= (low & 64) << 6;
+    result |= (high & 64) << 7;
+    result |= (low & 128) << 7;
+    result |= (high & 128) << 8;
+
+    return result;
+}
+
 void drawSpan( char pixelBuffer[], char *buffer, int x, int y ) {
+  unsigned int interleaved;
   unsigned char lowBits, highBits;
   char *p, *q;
   p = pixelBuffer + (x/4) + y * ROW_SIZE;
@@ -194,10 +226,10 @@ void drawSpan( char pixelBuffer[], char *buffer, int x, int y ) {
   {
     lowBits = ~*buffer++;
     highBits = ~*buffer++;
-    p[1] = (lowBits & 1) | ((highBits & 1) << 1) | ((lowBits & 2) << 1) | ((highBits & 2) << 2) | ((lowBits & 4) << 2)  | ((highBits & 4) << 3) | ((lowBits & 8) << 3) | ((highBits & 8) << 4);
-    lowBits >>= 4;
-    highBits >>= 4;
-    p[0] = (lowBits & 1) | ((highBits & 1) << 1) | ((lowBits & 2) << 1) | ((highBits & 2) << 2) | ((lowBits & 4) << 2)  | ((highBits & 4) << 3) | ((lowBits & 8) << 3) | ((highBits & 8) << 4);
+    interleaved = interleaveBytes(lowBits, highBits);
+    p[1] = (unsigned char)(interleaved);
+    p[0] = (unsigned char)(interleaved >> 8);
+//  *(uint16_t *)p = htons((uint16_t)interleaved);
   }
 }
 
