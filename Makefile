@@ -5,4 +5,4 @@ clean:
 	rm -f gbcamextract
 
 gbcamextract:	Makefile gbcamextract.c
-	gcc -Wall gbcamextract.c -lpng -o gbcamextract
+	gcc -Wall -std=c99 gbcamextract.c -lpng -o gbcamextract
