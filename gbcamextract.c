@@ -45,7 +45,7 @@ const int BUFFER_SIZE = 128*1024;
 static inline int picNum2BaseAddress( int picNum );
 static inline int getFrameAddress( int frameNumber );
 static inline unsigned int interleaveBytes( unsigned char low, unsigned char high );
-void convert( char frameBuffer[], char saveBuffer[], char pixelBuffer[], int picNum );
+void convert( char framesBuffer[], char saveBuffer[], char pixelBuffer[], int picNum );
 void writeImageFile( char pixelBuffer[], int picNum );
 void drawSpan( char pixelBuffer[], char *buffer, int x, int y );
 void readData( char *fileName, char *buffer, int offset );
@@ -55,7 +55,7 @@ int main( int argc, char *argv[] )
   int frames = 0;
   FILE* file;
   size_t blocksRead;
-  char frameBuffer[BANK_SIZE * 2];   // two banks
+  char framesBuffer[BANK_SIZE * 2];   // two banks
   
   // Argument count check
   if( argc < 2 )
@@ -102,7 +102,7 @@ int main( int argc, char *argv[] )
     // This is used to extract the frame data.
     blocksRead = 0;
     if( !fseek( file, BANK(0x34), SEEK_SET ) )       // beginning of bank 34h
-        blocksRead = fread( frameBuffer, BANK_SIZE * 2, 1, file );
+        blocksRead = fread( framesBuffer, BANK_SIZE * 2, 1, file );
     if( blocksRead != 1 )
     {
         // We read the wrong amount of bytes. Bail.
@@ -121,7 +121,7 @@ int main( int argc, char *argv[] )
   for( picNum = 1; picNum <= 30; ++picNum )
   {
     if( frames )
-      convert( frameBuffer, saveBuffer, pixelBuffer, picNum );
+      convert( framesBuffer, saveBuffer, pixelBuffer, picNum );
     else
       convert( NULL, saveBuffer, pixelBuffer, picNum );
     writeImageFile( pixelBuffer, picNum );
@@ -154,7 +154,7 @@ static inline int picNum2BaseAddress( int picNum )
   return (picNum + 1) * 0x1000;
 }
 
-void convert( char frameBuffer[], char saveBuffer[], char pixelBuffer[], int picNum )
+void convert( char framesBuffer[], char saveBuffer[], char pixelBuffer[], int picNum )
 {
   int baseAddress = picNum2BaseAddress( picNum );
   int frameNumber = saveBuffer[baseAddress + 0xfb0];
@@ -171,26 +171,26 @@ void convert( char frameBuffer[], char saveBuffer[], char pixelBuffer[], int pic
       drawSpan( pixelBuffer, tile, x, y );
     }
 
-    if( frameBuffer ) {
+    if( framesBuffer ) {
       // Draw the sides of the frame
       y = 16 + yTile*8;
       for ( z=0; z<4; ++z )
       {
-        tileNum = frameBuffer[frameAddress + 0x650 + yTile*4 + z];
-        tile = frameBuffer + frameAddress + tileNum*16;
+        tileNum = framesBuffer[frameAddress + 0x650 + yTile*4 + z];
+        tile = framesBuffer + frameAddress + tileNum*16;
         x = ((z&1)?8:0) + ((z&2)?HEIGHT:0);
         drawSpan( pixelBuffer, tile, x, y );
       }
     }
   }
 
-  if( frameBuffer ) {
+  if( framesBuffer ) {
     // Draw the top and bottom of the frame
     for( xTile=0; xTile<20; ++xTile ) for ( z=0; z<4; ++z )
     {
-      tileNum = frameBuffer[frameAddress + 0x600 + xTile + 0x14*z];
+      tileNum = framesBuffer[frameAddress + 0x600 + xTile + 0x14*z];
       tileAddress = frameAddress + tileNum*16;
-      tile = frameBuffer + tileAddress;
+      tile = framesBuffer + tileAddress;
       x = xTile*8;
       y = ((z&1)?8:0) + ((z&2)?128:0);
       drawSpan( pixelBuffer, tile, x, y );
