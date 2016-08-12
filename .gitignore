@@ -24,4 +24,11 @@
 *.x86_64
 *.hex
 
+# Pictures
+*.png
+
+# Game Boy things
+*.gb
+*.sav
+
 gbcamextract
