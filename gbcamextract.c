@@ -52,44 +52,20 @@ void readData( char *fileName, char *buffer, int offset );
 
 int main( int argc, char *argv[] )
 {
+  int frames = 0;
   FILE* file;
   size_t blocksRead;
+  char frameBuffer[BANK_SIZE * 2];   // two banks
+  
   // Argument count check
-  if( argc < 3 )
+  if( argc < 2 )
   {
-    fprintf( stderr, "%s: usage: gbcamextract camerarom.gb save.sav\n", argv[0] );
+    fprintf( stderr, "%s: usage: gbcamextract save.sav [camerarom.gb]\n", argv[0] );
     return EXIT_FAILURE;
   }
 
-
-  // Open rom file
-  file = fopen( argv[1], "r" );
-  if( file == NULL )
-  {
-    // Failure while attempting to open the file.
-    fprintf( stderr, "%s: cannot open `%s': %s\n", argv[0], argv[1], strerror(errno) );
-    return FILE_ERROR;
-  }
-
-  // Read the rom file into memory.
-  // This is used to extract the frame data.
-  char frameBuffer[BANK_SIZE * 2];   // two banks
-  blocksRead = 0;
-  if( !fseek( file, BANK(0x34), SEEK_SET ) )       // beginning of bank 34h
-    blocksRead = fread( frameBuffer, BANK_SIZE * 2, 1, file );
-  if( blocksRead != 1 )
-  {
-    // We read the wrong amount of bytes. Bail.
-    fprintf( stderr, "%s: cannot open `%s': Wrong file size.\n", argv[0], argv[1] );
-    return FILE_SIZE_ERROR;
-  }
-
-  // Close rom file
-  fclose( file );
-
-
   // Open save file
-  file = fopen( argv[2], "r" );
+  file = fopen( argv[1], "r" );
   if( file == NULL )
   {
     // Failure while attempting to open the file.
@@ -109,13 +85,45 @@ int main( int argc, char *argv[] )
 
   // Close save file
   fclose( file );
+  
+  // If a rom file was given, extract frames from it.
+  if( argc > 2 ) {
+    frames = 1;
+    // Open rom file
+    file = fopen( argv[2], "r" );
+    if( file == NULL )
+    {
+        // Failure while attempting to open the file.
+        fprintf( stderr, "%s: cannot open `%s': %s\n", argv[0], argv[1], strerror(errno) );
+        return FILE_ERROR;
+    }
+
+    // Read the rom file into memory.
+    // This is used to extract the frame data.
+    blocksRead = 0;
+    if( !fseek( file, BANK(0x34), SEEK_SET ) )       // beginning of bank 34h
+        blocksRead = fread( frameBuffer, BANK_SIZE * 2, 1, file );
+    if( blocksRead != 1 )
+    {
+        // We read the wrong amount of bytes. Bail.
+        fprintf( stderr, "%s: cannot open `%s': Wrong file size.\n", argv[0], argv[1] );
+        return FILE_SIZE_ERROR;
+    }
+    // Close rom file
+    fclose( file );
+  }
 
   // convert
   int picNum;
   char pixelBuffer[ROW_SIZE*HEIGHT];
+  memset( pixelBuffer, 0, ROW_SIZE*HEIGHT );    // set pixelBuffer to all black
+  
   for( picNum = 1; picNum <= 30; ++picNum )
   {
-    convert( frameBuffer, saveBuffer, pixelBuffer, picNum );
+    if( frames )
+      convert( frameBuffer, saveBuffer, pixelBuffer, picNum );
+    else
+      convert( NULL, saveBuffer, pixelBuffer, picNum );
     writeImageFile( pixelBuffer, picNum );
   }
 
@@ -163,26 +171,30 @@ void convert( char frameBuffer[], char saveBuffer[], char pixelBuffer[], int pic
       drawSpan( pixelBuffer, tile, x, y );
     }
 
-    // Draw the sides of the frame
-    y = 16 + yTile*8;
-    for ( z=0; z<4; ++z )
-    {
-      tileNum = frameBuffer[frameAddress + 0x650 + yTile*4 + z];
-      tile = frameBuffer + frameAddress + tileNum*16;
-      x = ((z&1)?8:0) + ((z&2)?HEIGHT:0);
-      drawSpan( pixelBuffer, tile, x, y );
+    if( frameBuffer ) {
+      // Draw the sides of the frame
+      y = 16 + yTile*8;
+      for ( z=0; z<4; ++z )
+      {
+        tileNum = frameBuffer[frameAddress + 0x650 + yTile*4 + z];
+        tile = frameBuffer + frameAddress + tileNum*16;
+        x = ((z&1)?8:0) + ((z&2)?HEIGHT:0);
+        drawSpan( pixelBuffer, tile, x, y );
+      }
     }
   }
 
-  // Draw the top and bottom of the frame
-  for( xTile=0; xTile<20; ++xTile ) for ( z=0; z<4; ++z )
-  {
-    tileNum = frameBuffer[frameAddress + 0x600 + xTile + 0x14*z];
-    tileAddress = frameAddress + tileNum*16;
-    tile = frameBuffer + tileAddress;
-    x = xTile*8;
-    y = ((z&1)?8:0) + ((z&2)?128:0);
-    drawSpan( pixelBuffer, tile, x, y );
+  if( frameBuffer ) {
+    // Draw the top and bottom of the frame
+    for( xTile=0; xTile<20; ++xTile ) for ( z=0; z<4; ++z )
+    {
+      tileNum = frameBuffer[frameAddress + 0x600 + xTile + 0x14*z];
+      tileAddress = frameAddress + tileNum*16;
+      tile = frameBuffer + tileAddress;
+      x = xTile*8;
+      y = ((z&1)?8:0) + ((z&2)?128:0);
+      drawSpan( pixelBuffer, tile, x, y );
+    }
   }
 }
 

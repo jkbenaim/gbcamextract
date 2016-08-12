@@ -1,17 +1,19 @@
 gbcamextract
 ============
 
-Extracts photos from Game Boy Camera saves. Frames are preserved. Requires [libpng](http://www.libpng.org/pub/png/libpng.html).
+Extracts photos from Game Boy Camera saves. Frames can be preserved. Requires [libpng](http://www.libpng.org/pub/png/libpng.html).
 
 ## Usage
 
 ```console
-gbcamextract camerarom.gb save.sav
+gbcamextract save.sav
 ```
 
-This will produce 30 PNG files containing your photos.
+This will produce 30 PNG files containing your photos. If you want the frames around your photos to be preserved, then you must provide a Game Boy Camera ROM, like so:
 
-`black.gb` has been provided, which will output a black border for all photos, regardless of which border may have been originally set.
+```console
+gbcamextract save.sav camera.gb
+```
 
 
 ## Install
