@@ -302,6 +302,7 @@ void writeImageFile( char pixelBuffer[], int picNum )
 
   png_write_end(png_ptr, info_ptr);
   png_destroy_write_struct(&png_ptr, &info_ptr);
+  if( row_pointers ) free( row_pointers );
 
   fclose(fp);
 }
