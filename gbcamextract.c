@@ -161,7 +161,7 @@ static inline int getFrameAddress( int frameNumber ) {
   {
     // validate the frame number, hello kitty version has 25 frames
     if( frameNumber < 0 || frameNumber >= 25 )
-      frameNumber = 13;
+      frameNumber = 24;
 
     // retrieve the border address
     frameAddress = HELLO_KITTY_FRAME_OFFSETS[frameNumber][0];
