@@ -46,7 +46,6 @@ const int ROW_SIZE = 40; // WIDTH/4: 2 bits per pixel means 4 pixels per byte
 const int HEIGHT = 144;
 const int BUFFER_SIZE = 128*1024;
 const int ROM_BUFFER_SIZE = 1024*1024;
-
 _Bool isHK = 0;
 
 static inline int picNum2BaseAddress( int picNum );
@@ -108,9 +107,6 @@ int main( int argc, char *argv[] )
 
     // Read the rom file into memory.
     // This is used to extract the frame data.
-
-    fread( romTitle, ROM_TITLE_LENGTH, 1, file );
-
     blocksRead = 0;
     if( !fseek( file, BANK(0x34), SEEK_SET ) )       // beginning of bank 34h
     {
