@@ -164,7 +164,7 @@ static inline int getFrameAddress( int frameNumber ) {
       frameNumber = 13;
 
     // retrieve the border address
-    frameAddress = HELLO_KITTY_STANDARD_OFFSETS[frameNumber][0];
+    frameAddress = HELLO_KITTY_FRAME_OFFSETS[frameNumber][0];
   }
   else
   {
@@ -212,7 +212,7 @@ void convert( char framesBuffer[], char saveBuffer[], char pixelBuffer[], int pi
       for ( z=0; z<4; ++z )
       {
         if(isHK == 1) {
-          tileNum = framesBuffer[HELLO_KITTY_STANDARD_OFFSETS[frameNumber][1] + 0x50 + yTile*4 + z];
+          tileNum = framesBuffer[HELLO_KITTY_FRAME_OFFSETS[frameNumber][1] + 0x50 + yTile*4 + z];
         } else {
           tileNum = framesBuffer[frameAddress + 0x650 + yTile*4 + z];
         }
@@ -228,7 +228,7 @@ void convert( char framesBuffer[], char saveBuffer[], char pixelBuffer[], int pi
     for( xTile=0; xTile<20; ++xTile ) for ( z=0; z<4; ++z )
     {
       if(isHK == 1) {
-        tileNum = framesBuffer[HELLO_KITTY_STANDARD_OFFSETS[frameNumber][1] + xTile + 0x14*z];
+        tileNum = framesBuffer[HELLO_KITTY_FRAME_OFFSETS[frameNumber][1] + xTile + 0x14*z];
       } else {
         tileNum = framesBuffer[frameAddress + 0x600 + xTile + 0x14*z];
       }
