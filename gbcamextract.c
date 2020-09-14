@@ -118,7 +118,7 @@ int main( int argc, char *argv[] )
       fread( romTitle, ROM_TITLE_LENGTH, 1, file );
       if (strcmp(romTitle, "POCKETCAMERA_SN") == 0)
       {
-        // if it's the hello kitty rom, read the entire thing. Frames are all over the place
+        // if it's the hello kitty rom, read the entire thing. frames are all over the place
         isHK = 1;
         fseek( file, 0x0, SEEK_SET );
         blocksRead = fread( framesBuffer, ROM_BUFFER_SIZE, 1, file );
@@ -163,11 +163,11 @@ static inline int getFrameAddress( int frameNumber ) {
 
   if (isHK)
   {
-    // validate the frame number
+    // validate the frame number, hello kitty version has 25 frames
     if( frameNumber < 0 || frameNumber >= 25 )
       frameNumber = 13;
 
-    // calculate the border address.
+    // retrieve the border address
     frameAddress = HELLO_KITTY_STANDARD_OFFSETS[frameNumber][0];
   }
   else
