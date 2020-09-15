@@ -46,12 +46,12 @@ const int ROW_SIZE = 40; // WIDTH/4: 2 bits per pixel means 4 pixels per byte
 const int HEIGHT = 144;
 const int BUFFER_SIZE = 128*1024;
 const int ROM_BUFFER_SIZE = 1024*1024;
-_Bool isHK = 0;
+int isHelloKittyRom = 0;
 
 static inline int picNum2BaseAddress( int picNum );
 static inline int getFrameAddress( int frameNumber );
 static inline unsigned int interleaveBytes( unsigned char low, unsigned char high );
-void convert( char framesBuffer[], char saveBuffer[], char pixelBuffer[], int picNum, int isHK );
+void convert( char framesBuffer[], char saveBuffer[], char pixelBuffer[], int picNum, int isHelloKittyRom );
 void writeImageFile( char pixelBuffer[], int picNum );
 void drawSpan( char pixelBuffer[], char *buffer, int x, int y );
 void readData( char *fileName, char *buffer, int offset );
@@ -115,7 +115,7 @@ int main( int argc, char *argv[] )
       if (strcmp(romTitle, "POCKETCAMERA_SN") == 0)
       {
         // if it's the hello kitty rom, read the entire thing. frames are all over the place
-        isHK = 1;
+        isHelloKittyRom = 1;
         fseek( file, 0x0, SEEK_SET );
         blocksRead = fread( framesBuffer, ROM_BUFFER_SIZE, 1, file );
       }
@@ -144,9 +144,9 @@ int main( int argc, char *argv[] )
   for( picNum = 1; picNum <= 30; ++picNum )
   {
     if( frames )
-      convert( framesBuffer, saveBuffer, pixelBuffer, picNum, isHK );
+      convert( framesBuffer, saveBuffer, pixelBuffer, picNum, isHelloKittyRom );
     else
-      convert( NULL, saveBuffer, pixelBuffer, picNum, isHK );
+      convert( NULL, saveBuffer, pixelBuffer, picNum, isHelloKittyRom );
     writeImageFile( pixelBuffer, picNum );
   }
 
@@ -157,7 +157,7 @@ int main( int argc, char *argv[] )
 static inline int getFrameAddress( int frameNumber ) {
   int frameAddress;
 
-  if (isHK)
+  if (isHelloKittyRom == 1)
   {
     // validate the frame number, hello kitty version has 25 frames
     if( frameNumber < 0 || frameNumber >= 25 )
@@ -189,7 +189,7 @@ static inline int picNum2BaseAddress( int picNum )
   return (picNum + 1) * 0x1000;
 }
 
-void convert( char framesBuffer[], char saveBuffer[], char pixelBuffer[], int picNum, int isHK )
+void convert( char framesBuffer[], char saveBuffer[], char pixelBuffer[], int picNum, int isHelloKittyRom )
 {
   int baseAddress = picNum2BaseAddress( picNum );
   int frameNumber = saveBuffer[baseAddress + 0xfb0];
@@ -211,7 +211,7 @@ void convert( char framesBuffer[], char saveBuffer[], char pixelBuffer[], int pi
       y = 16 + yTile*8;
       for ( z=0; z<4; ++z )
       {
-        if(isHK == 1) {
+        if(isHelloKittyRom == 1) {
           tileNum = framesBuffer[HELLO_KITTY_FRAME_OFFSETS[frameNumber][1] + 0x50 + yTile*4 + z];
         } else {
           tileNum = framesBuffer[frameAddress + 0x650 + yTile*4 + z];
@@ -227,7 +227,7 @@ void convert( char framesBuffer[], char saveBuffer[], char pixelBuffer[], int pi
     // Draw the top and bottom of the frame
     for( xTile=0; xTile<20; ++xTile ) for ( z=0; z<4; ++z )
     {
-      if(isHK == 1) {
+      if(isHelloKittyRom == 1) {
         tileNum = framesBuffer[HELLO_KITTY_FRAME_OFFSETS[frameNumber][1] + xTile + 0x14*z];
       } else {
         tileNum = framesBuffer[frameAddress + 0x600 + xTile + 0x14*z];
