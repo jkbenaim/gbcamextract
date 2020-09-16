@@ -1,8 +1,5 @@
-all: 	gbcamextract
+PROG= gbcamextract
+VERSION_STRING= 1.0
+LDLIBS += -lpng
 
-
-clean:
-	rm -f gbcamextract
-
-gbcamextract:	Makefile gbcamextract.c
-	gcc -Wall -std=c99 gbcamextract.c -lpng -o gbcamextract
+include Makefile.in

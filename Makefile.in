@@ -1,0 +1,17 @@
+target  ?= ${PROG}
+objects := $(patsubst %.c,%.o,$(wildcard *.c))
+
+CFLAGS  += -std=gnu99 -Os -ggdb -D__progversion=\"${VERSION_STRING}\" -D__progname=\"${PROG}\" -Wimplicit-fallthrough
+
+.PHONY: all
+all:	$(target)
+
+.PHONY: clean
+clean:
+	rm -f $(target) $(objects)
+
+.PHONY: install
+install:
+	cp $(target) /usr/local/bin/$(target)
+
+$(target): $(objects)
