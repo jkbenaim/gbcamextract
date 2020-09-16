@@ -62,7 +62,7 @@ int main( int argc, char *argv[] )
   FILE* file;
   size_t blocksRead;
   char framesBuffer[ROM_BUFFER_SIZE];
-  char romTitle[ROM_TITLE_LENGTH];
+  char romTitle[ROM_TITLE_LENGTH] = "";
   
   // Argument count check
   if( argc < 2 )
