@@ -1,7 +1,7 @@
 target  ?= ${PROG}
 objects := $(patsubst %.c,%.o,$(wildcard *.c))
 
-CFLAGS  += -std=gnu99 -Os -ggdb -D__progversion=\"${VERSION_STRING}\" -D__progname=\"${PROG}\" -Wimplicit-fallthrough
+CFLAGS  += -std=gnu99 -Os -ggdb -D__progversion=\"${VERSION_STRING}\" -D__progname=\"${PROG}\"
 
 .PHONY: all
 all:	$(target)
