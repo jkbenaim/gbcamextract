@@ -49,7 +49,7 @@ void writeImageFile( char pixelBuffer[], int picNum );
 void drawSpan( char pixelBuffer[], char *buffer, int x, int y );
 void readData( char *fileName, char *buffer, int offset );
 
-int main( int argc, char *argv[] )
+int oldmain( int argc, char *argv[] )
 {
   int frames = 0;
   FILE* file;
