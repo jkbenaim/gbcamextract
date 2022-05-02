@@ -31,4 +31,7 @@
 *.gb
 *.sav
 
+# vim swapfiles
+*.swp
+
 gbcamextract
