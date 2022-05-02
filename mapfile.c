@@ -185,7 +185,7 @@ struct MappedFile_s MappedFile_Create(char *filename, size_t size)
 	close(m._fd);
 	if (truncate(filename, size) < 0) goto out_error;
 	m._fd = open(filename, O_RDWR);
-	if (!m._fd) goto out_error;
+	if (m._fd == -1) goto out_error;
 
 	m.data = mmap(
 		NULL,
@@ -195,7 +195,7 @@ struct MappedFile_s MappedFile_Create(char *filename, size_t size)
 		m._fd,
 		0
 	);
-	if (m.data == NULL) {
+	if (m.data == MAP_FAILED) {
 		goto out_close;
 	}
 
@@ -225,7 +225,7 @@ struct MappedFile_s MappedFile_Open(char *filename, bool writable)
 	m.size = sb.st_size;
 
 	m._fd = open(filename, writable ? O_RDWR : O_RDONLY);
-	if (!m._fd) {
+	if (m._fd == -1) {
 		goto out_error;
 	}
 
@@ -237,7 +237,7 @@ struct MappedFile_s MappedFile_Open(char *filename, bool writable)
 		m._fd,
 		0
 	);
-	if (m.data == NULL) {
+	if (m.data == MAP_FAILED) {
 		goto out_close;
 	}
 
@@ -246,6 +246,7 @@ struct MappedFile_s MappedFile_Open(char *filename, bool writable)
 out_close:
 	close(m._fd);
 out_error:
+	m.size = 0;
 	m.data = NULL;
 out_ok:
 	return m;
