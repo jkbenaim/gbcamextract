@@ -17,11 +17,14 @@
  */
 
 
-#include <stdlib.h>     // malloc, EXIT_SUCCESS, EXIT_FAILURE, NULL
-#include <stdio.h>      // printf, fopen, fclose, fread
-#include <string.h>     // strerror
+#include <err.h>
 #include <errno.h>      // errno
 #include <png.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>      // printf, fopen, fclose, fread
+#include <stdlib.h>     // malloc, EXIT_SUCCESS, EXIT_FAILURE, NULL
+#include <string.h>     // strerror
 #include <zlib.h>
 
 const int HELLO_KITTY_FRAME_OFFSETS[25][2] = {{0xC6C70, 0xCF5D0}, {0xC3B80, 0xCF548}, {0xCBEC0, 0xCF4C0}, {0xC5F10, 0xCF658}, {0xCF210, 0xCF7F0}, {0xC73A0, 0xCF768}, {0xB7420, 0xCF6E0}, {0xBE3E0, 0xCF438}, {0xB3CD0, 0xC7EF0}, {0xB2B80, 0xCF3B0}, {0x8FD50, 0xC7F78}, {0xC3800, 0xD7800}, {0xBDC00, 0xD3F70}, {0xD7F70, 0xD7888}, {0xC5C00, 0xD7998}, {0xB7C20, 0xD7910}, {0xC3ED0, 0xD3D50}, {0x33F80, 0xD3CC8}, {0xDB800, 0xD3DD8}, {0xB2200, 0xD3EE8}, {0xB34D0, 0xD3E60}, {0xB3030, 0xD7A20}, {0x93E00, 0xD7D50}, {0x77FE0, 0xCFCB8}, {0x77FF0, 0xCFDC4}};
@@ -43,19 +46,30 @@ int isHelloKittyRom = 0;
 
 static inline int picNum2BaseAddress(int picNum);
 static inline int getFrameAddress(int frameNumber);
-static inline unsigned int interleaveBytes(unsigned char low, unsigned char high);
-void convert(char framesBuffer[], char saveBuffer[], char pixelBuffer[], int picNum, int isHelloKittyRom);
-void writeImageFile(char pixelBuffer[], int picNum);
-void drawSpan(char pixelBuffer[], char *buffer, int x, int y);
-void readData(char *fileName, char *buffer, int offset);
+static inline unsigned int interleaveBytes(uint8_t low, uint8_t high);
+void convert(uint8_t framesBuffer[], uint8_t saveBuffer[], uint8_t pixelBuffer[], int picNum, int isHelloKittyRom);
+void writeImageFile(uint8_t pixelBuffer[], int picNum);
+void drawSpan(uint8_t pixelBuffer[], uint8_t *buffer, int x, int y);
+void readData(uint8_t *fileName, uint8_t *buffer, int offset);
+bool isGbRom(const uint8_t data[0x110]);
+
+bool isGbRom(const uint8_t data[0x110])
+{
+	const uint8_t sig[] = {0xce, 0xed, 0x66, 0x66};
+	if (!memcmp(data + 0x104, sig, 4))
+		return true;
+	else
+		return false;
+}
 
 int main(int argc, char *argv[])
 {
 	int frames = 0;
 	FILE* file;
 	size_t blocksRead;
-	char framesBuffer[ROM_BUFFER_SIZE];
+	uint8_t framesBuffer[ROM_BUFFER_SIZE];
 	char romTitle[ROM_TITLE_LENGTH] = "";
+	uint8_t saveBuffer[BUFFER_SIZE];   // 128k son. this is as good as it gets on gameboy
 
 	// Argument count check
 	if (argc < 2)
@@ -74,7 +88,6 @@ int main(int argc, char *argv[])
 	}
 
 	// Read the save file into memory
-	char saveBuffer[BUFFER_SIZE];   // 128k son. this is as good as it gets on gameboy
 	blocksRead = fread(saveBuffer, BUFFER_SIZE, 1, file);
 	if(blocksRead != 1)
 	{
@@ -85,6 +98,10 @@ int main(int argc, char *argv[])
 
 	// Close save file
 	fclose(file);
+
+	// Check if the save that we read is actually a rom.
+	if (isGbRom(saveBuffer))
+		errx(1, "save expected, but rom was given");
 
 	// If a rom file was given, extract frames from it.
 	if (argc > 2) {
@@ -131,7 +148,7 @@ int main(int argc, char *argv[])
 
 	// convert
 	int picNum;
-	char pixelBuffer[ROW_SIZE*HEIGHT];
+	uint8_t pixelBuffer[ROW_SIZE*HEIGHT];
 	memset(pixelBuffer, 0, ROW_SIZE*HEIGHT);    // set pixelBuffer to all black
 
 	for (picNum = 1; picNum <= 30; ++picNum)
@@ -183,13 +200,13 @@ static inline int picNum2BaseAddress(int picNum)
 	return (picNum + 1) * 0x1000;
 }
 
-void convert(char framesBuffer[], char saveBuffer[], char pixelBuffer[], int picNum, int isHelloKittyRom)
+void convert(uint8_t framesBuffer[], uint8_t saveBuffer[], uint8_t pixelBuffer[], int picNum, int isHelloKittyRom)
 {
 	int baseAddress = picNum2BaseAddress(picNum);
 	int frameNumber = saveBuffer[baseAddress + 0xfb0];
 	int frameAddress = getFrameAddress(frameNumber);
 	int xTile, yTile, tileAddress, tileNum, x, y, z;
-	char *tile;
+	uint8_t *tile;
 	for (yTile = 0; yTile < 14; ++yTile)
 	{
 		y = 16 + yTile*8;
@@ -236,7 +253,7 @@ void convert(char framesBuffer[], char saveBuffer[], char pixelBuffer[], int pic
 	}
 }
 
-static inline unsigned int interleaveBytes(unsigned char low, unsigned char high)
+static inline unsigned int interleaveBytes(uint8_t low, uint8_t high)
 {
 	int result;
 	// We recieve two vars, each 8 bits in length
@@ -267,23 +284,23 @@ static inline unsigned int interleaveBytes(unsigned char low, unsigned char high
 	return result;
 }
 
-void drawSpan(char pixelBuffer[], char *buffer, int x, int y) {
+void drawSpan(uint8_t pixelBuffer[], uint8_t *buffer, int x, int y) {
 	unsigned int interleaved;
-	unsigned char lowBits, highBits;
-	char *p, *q;
+	uint8_t lowBits, highBits;
+	uint8_t *p, *q;
 	p = pixelBuffer + (x/4) + y * ROW_SIZE;
 	for(q = p + ROW_SIZE * 8; p<q; p+=ROW_SIZE)
 	{
 		lowBits = ~*buffer++;
 		highBits = ~*buffer++;
 		interleaved = interleaveBytes(lowBits, highBits);
-		p[1] = (unsigned char)(interleaved);
-		p[0] = (unsigned char)(interleaved >> 8);
+		p[1] = (uint8_t)(interleaved);
+		p[0] = (uint8_t)(interleaved >> 8);
 		//  *(uint16_t *)p = htons((uint16_t)interleaved);
 	}
 }
 
-void writeImageFile(char pixelBuffer[], int picNum)
+void writeImageFile(uint8_t pixelBuffer[], int picNum)
 {
 	int y;
 	// open file
@@ -315,7 +332,8 @@ void writeImageFile(char pixelBuffer[], int picNum)
 			PNG_COLOR_TYPE_GRAY, PNG_INTERLACE_NONE, PNG_COMPRESSION_TYPE_DEFAULT, PNG_FILTER_TYPE_DEFAULT);
 
 	// setup row pointers
-	png_bytep * row_pointers = malloc(sizeof(png_bytep) * HEIGHT);
+	png_bytep *row_pointers = malloc(sizeof(png_bytep) * HEIGHT);
+	if (!row_pointers) err(1, "malloc failure");
 	for(y=0; y<HEIGHT; ++y)
 		row_pointers[y] = (png_byte *)(pixelBuffer + ROW_SIZE * y);
 
