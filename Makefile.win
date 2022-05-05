@@ -2,7 +2,7 @@ target ?= gbcamextract
 VERSION_STRING= 1.1
 objects := $(patsubst %.c,%.o,$(wildcard *.c))
 
-LDLIBS += -lpng
+LDLIBS += -Wl,-Bstatic -l:libpng.a -Wl,-Bstatic -l:libz.a
 
 CFLAGS  += -std=gnu99 -Os -ggdb -D__progversion=\"${VERSION_STRING}\" -D__progname=\"${target}\"
 

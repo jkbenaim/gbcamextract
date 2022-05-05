@@ -16,8 +16,7 @@
  *
  */
 
-
-#include <err.h>
+#include "err_shim.h"
 #include <errno.h>      // errno
 #include <png.h>
 #include <stdbool.h>
@@ -29,6 +28,7 @@
 #include <zlib.h>
 #include "mapfile.h"
 #include "sram.h"
+#include "wingetopt.h"
 
 const int HELLO_KITTY_FRAME_OFFSETS[25][2] = {{0xC6C70, 0xCF5D0}, {0xC3B80, 0xCF548}, {0xCBEC0, 0xCF4C0}, {0xC5F10, 0xCF658}, {0xCF210, 0xCF7F0}, {0xC73A0, 0xCF768}, {0xB7420, 0xCF6E0}, {0xBE3E0, 0xCF438}, {0xB3CD0, 0xC7EF0}, {0xB2B80, 0xCF3B0}, {0x8FD50, 0xC7F78}, {0xC3800, 0xD7800}, {0xBDC00, 0xD3F70}, {0xD7F70, 0xD7888}, {0xC5C00, 0xD7998}, {0xB7C20, 0xD7910}, {0xC3ED0, 0xD3D50}, {0x33F80, 0xD3CC8}, {0xDB800, 0xD3DD8}, {0xB2200, 0xD3EE8}, {0xB34D0, 0xD3E60}, {0xB3030, 0xD7A20}, {0x93E00, 0xD7D50}, {0x77FE0, 0xCFCB8}, {0x77FF0, 0xCFDC4}};
 #define ROM_TITLE_OFFSET 0x134
@@ -56,6 +56,7 @@ void readData(uint8_t *fileName, uint8_t *buffer, int offset);
 bool isGbRom(const uint8_t data[0x150]);
 bool isHkRom(const uint8_t rom[0x150]);
 static void noreturn usage(void);
+static void noreturn version(void);
 
 bool isGbRom(const uint8_t data[0x150])
 {
@@ -95,7 +96,7 @@ int main(int argc, char *argv[])
 	struct MappedFile_s mRom = {0};
 	uint8_t pixelBuffer[ROW_SIZE*HEIGHT];
 
-	while ((rc = getopt(argc, argv, "s:r:")) != -1)
+	while ((rc = getopt(argc, argv, "s:r:V")) != -1)
 		switch (rc) {
 		case 's':
 			if (filename_save)
@@ -106,6 +107,9 @@ int main(int argc, char *argv[])
 			if (filename_rom)
 				usage();
 			filename_rom = optarg;
+			break;
+		case 'V':
+			version();
 			break;
 		default:
 			usage();
@@ -376,5 +380,11 @@ static void noreturn usage(void)
 	fprintf(stderr, "usage: %s [-r rom.gb] -s save.sav\n",
 		__progname
 	);
+	exit(EXIT_FAILURE);
+}
+
+static void noreturn version(void)
+{
+	fprintf(stderr, "%s %s\n", __progname, __progversion);
 	exit(EXIT_FAILURE);
 }
