@@ -24,8 +24,11 @@
 #include <stdint.h>
 #include <stdio.h>      // printf, fopen, fclose, fread
 #include <stdlib.h>     // malloc, EXIT_SUCCESS, EXIT_FAILURE, NULL
+#include <stdnoreturn.h>
 #include <string.h>     // strerror
 #include <zlib.h>
+#include "mapfile.h"
+#include "sram.h"
 
 const int HELLO_KITTY_FRAME_OFFSETS[25][2] = {{0xC6C70, 0xCF5D0}, {0xC3B80, 0xCF548}, {0xCBEC0, 0xCF4C0}, {0xC5F10, 0xCF658}, {0xCF210, 0xCF7F0}, {0xC73A0, 0xCF768}, {0xB7420, 0xCF6E0}, {0xBE3E0, 0xCF438}, {0xB3CD0, 0xC7EF0}, {0xB2B80, 0xCF3B0}, {0x8FD50, 0xC7F78}, {0xC3800, 0xD7800}, {0xBDC00, 0xD3F70}, {0xD7F70, 0xD7888}, {0xC5C00, 0xD7998}, {0xB7C20, 0xD7910}, {0xC3ED0, 0xD3D50}, {0x33F80, 0xD3CC8}, {0xDB800, 0xD3DD8}, {0xB2200, 0xD3EE8}, {0xB34D0, 0xD3E60}, {0xB3030, 0xD7A20}, {0x93E00, 0xD7D50}, {0x77FE0, 0xCFCB8}, {0x77FF0, 0xCFDC4}};
 #define ROM_TITLE_OFFSET 0x134
@@ -40,20 +43,21 @@ const int FILE_SIZE_ERROR = 3;
 const int WIDTH = 160;
 const int ROW_SIZE = 40; // WIDTH/4: 2 bits per pixel means 4 pixels per byte
 const int HEIGHT = 144;
-const int BUFFER_SIZE = 128*1024;
+const int SAVEGAME_SIZE = 128*1024;
 const int ROM_BUFFER_SIZE = 1024*1024;
-int isHelloKittyRom = 0;
 
 static inline int picNum2BaseAddress(int picNum);
-static inline int getFrameAddress(int frameNumber);
+uint8_t *getFrame(uint8_t rom[], int frameNumber);
 static inline unsigned int interleaveBytes(uint8_t low, uint8_t high);
-void convert(uint8_t framesBuffer[], uint8_t saveBuffer[], uint8_t pixelBuffer[], int picNum, int isHelloKittyRom);
-void writeImageFile(uint8_t pixelBuffer[], int picNum);
+void convert(uint8_t framesBuffer[], uint8_t saveBuffer[], uint8_t pixelBuffer[], int picNum);
+void writeImageFile(uint8_t pixelBuffer[], const char *filename);
 void drawSpan(uint8_t pixelBuffer[], uint8_t *buffer, int x, int y);
 void readData(uint8_t *fileName, uint8_t *buffer, int offset);
-bool isGbRom(const uint8_t data[0x110]);
+bool isGbRom(const uint8_t data[0x150]);
+bool isHkRom(const uint8_t rom[0x150]);
+static void noreturn usage(void);
 
-bool isGbRom(const uint8_t data[0x110])
+bool isGbRom(const uint8_t data[0x150])
 {
 	const uint8_t sig[] = {0xce, 0xed, 0x66, 0x66};
 	if (!memcmp(data + 0x104, sig, 4))
@@ -62,113 +66,120 @@ bool isGbRom(const uint8_t data[0x110])
 		return false;
 }
 
+int getPicNumForSlotNum(const uint8_t *save, int slotNum)
+{
+	int picNum;
+	struct firstslot_s *firstslot = (struct firstslot_s *)save;
+	if ((slotNum < 1) || (slotNum > 30))
+		return -1;
+	picNum = firstslot->vec[slotNum-1];
+	switch (picNum) {
+	case 0 ... 29:
+		picNum++;
+		break;
+	case 255:
+	default:
+		picNum = -1;
+		break;
+	}
+
+	return picNum;
+}
+
 int main(int argc, char *argv[])
 {
-	int frames = 0;
-	FILE* file;
-	size_t blocksRead;
-	uint8_t framesBuffer[ROM_BUFFER_SIZE];
-	char romTitle[ROM_TITLE_LENGTH] = "";
-	uint8_t saveBuffer[BUFFER_SIZE];   // 128k son. this is as good as it gets on gameboy
+	char *filename_save = NULL;
+	char *filename_rom = NULL;
+	int rc;
+	struct MappedFile_s mSave = {0};
+	struct MappedFile_s mRom = {0};
+	uint8_t pixelBuffer[ROW_SIZE*HEIGHT];
 
-	// Argument count check
-	if (argc < 2)
-	{
-		fprintf(stderr, "%s: usage: gbcamextract save.sav [camerarom.gb]\n", argv[0]);
-		return EXIT_FAILURE;
-	}
+	while ((rc = getopt(argc, argv, "s:r:")) != -1)
+		switch (rc) {
+		case 's':
+			if (filename_save)
+				usage();
+			filename_save = optarg;
+			break;
+		case 'r':
+			if (filename_rom)
+				usage();
+			filename_rom = optarg;
+			break;
+		default:
+			usage();
+		}
+	argc -= optind;
+	argv += optind;
+	if (*argv != NULL)
+		usage();
 
-	// Open save file
-	file = fopen(argv[1], "r");
-	if(file == NULL)
-	{
-		// Failure while attempting to open the file.
-		fprintf(stderr, "%s: cannot open `%s': %s\n", argv[0], argv[2], strerror(errno));
-		return FILE_ERROR;
-	}
+	if (!filename_save)
+		usage();
 
-	// Read the save file into memory
-	blocksRead = fread(saveBuffer, BUFFER_SIZE, 1, file);
-	if(blocksRead != 1)
-	{
-		// We read the wrong amount of bytes. Bail.
-		fprintf(stderr, "%s: cannot open `%s': Wrong file size.\n", argv[0], argv[2]);
-		return FILE_SIZE_ERROR;
-	}
+	// Open the save file.
+	mSave = MappedFile_Open(filename_save, false);
+	if (!mSave.data)
+		err(1, "couldn't open save for reading");
 
-	// Close save file
-	fclose(file);
-
+	// Check the savegame's size.
+	if (mSave.size != 131072)
+		errx(1, "savegame has weird size");
+	
 	// Check if the save that we read is actually a rom.
-	if (isGbRom(saveBuffer))
+	if (isGbRom(mSave.data))
 		errx(1, "save expected, but rom was given");
 
-	// If a rom file was given, extract frames from it.
-	if (argc > 2) {
-		frames = 1;
-		// Open rom file
-		file = fopen(argv[2], "r");
-		if(file == NULL)
-		{
-			// Failure while attempting to open the file.
-			fprintf(stderr, "%s: cannot open `%s': %s\n", argv[0], argv[1], strerror(errno));
-			return FILE_ERROR;
-		}
-
-		// Read the rom file into memory.
-		// This is used to extract the frame data.
-		blocksRead = 0;
-		if (!fseek(file, BANK(0x34), SEEK_SET))       // beginning of bank 34h
-		{
-			fseek(file, ROM_TITLE_OFFSET, SEEK_SET);
-			fread(romTitle, ROM_TITLE_LENGTH, 1, file);
-			if (strcmp(romTitle, "POCKETCAMERA_SN") == 0)
-			{
-				// if it's the hello kitty rom, read the entire thing. frames are all over the place
-				isHelloKittyRom = 1;
-				fseek(file, 0x0, SEEK_SET);
-				blocksRead = fread(framesBuffer, ROM_BUFFER_SIZE, 1, file);
-			}
-			else
-			{
-				// read only two banks with frame data
-				fseek(file, BANK(0x34), SEEK_SET);
-				blocksRead = fread(framesBuffer, BANK_SIZE * 2, 1, file);
-			}
-		}
-		if (blocksRead != 1)
-		{
-			// We read the wrong amount of bytes. Bail.
-			fprintf(stderr, "%s: cannot open `%s': Wrong file size.\n", argv[0], argv[1]);
-			return FILE_SIZE_ERROR;
-		}
-		// Close rom file
-		fclose(file);
+	// If a rom was given, open it.
+	if (filename_rom) {
+		mRom = MappedFile_Open(filename_rom, false);
+		if (!mRom.data)
+			err(1, "couldn't open rom for reading");
+		if (mRom.size != 1048576)
+			errx(1, "rom has weird size");
+		if (!isGbRom(mRom.data))
+			errx(1, "rom given doesn't look like a real rom");
 	}
 
+	
 	// convert
-	int picNum;
-	uint8_t pixelBuffer[ROW_SIZE*HEIGHT];
 	memset(pixelBuffer, 0, ROW_SIZE*HEIGHT);    // set pixelBuffer to all black
 
-	for (picNum = 1; picNum <= 30; ++picNum)
+	for (int slotNum = 1; slotNum <= 30; ++slotNum)
 	{
-		if (frames)
-			convert(framesBuffer, saveBuffer, pixelBuffer, picNum, isHelloKittyRom);
+		int picNum = getPicNumForSlotNum(mSave.data, slotNum);
+		char filename[16] = {0};
+		convert(mRom.data, mSave.data, pixelBuffer, slotNum);
+		if (picNum != -1)
+			snprintf(filename, 15, "IMG_%02d.png", picNum);
 		else
-			convert(NULL, saveBuffer, pixelBuffer, picNum, isHelloKittyRom);
-		writeImageFile(pixelBuffer, picNum);
+			snprintf(filename, 15, "DEL_%02d.png", slotNum);
+		filename[15] = '\0';
+		writeImageFile(pixelBuffer, filename);
 	}
 
 	// Return
 	return EXIT_SUCCESS;
 }
 
-static inline int getFrameAddress(int frameNumber)
+bool isHkRom(const uint8_t rom[0x150])
+{
+	if (!memcmp(rom + ROM_TITLE_OFFSET, "POCKETCAMERA_SN", ROM_TITLE_LENGTH))
+		return true;
+	else
+		return false;
+}
+
+uint8_t *getFrame(uint8_t rom[], int frameNumber)
 {
 	int frameAddress;
 
-	if (isHelloKittyRom == 1)
+	if (!rom) {
+		return NULL;
+	}
+
+	if (isHkRom(rom))
 	{
 		// validate the frame number, hello kitty version has 25 frames
 		if( frameNumber < 0 || frameNumber >= 25 )
@@ -184,14 +195,14 @@ static inline int getFrameAddress(int frameNumber)
 			frameNumber = 13;
 
 		// calculate the border address.
-		// it can be in one of two banks
+		// it can be in one of two banks.
 		if(frameNumber < 9)
-			frameAddress = BANK(0) + frameNumber * 0x688;
+			frameAddress = BANK(0x34) + frameNumber * 0x688;
 		else
-			frameAddress = BANK(1) + (frameNumber - 9) * 0x688;
+			frameAddress = BANK(0x35) + (frameNumber - 9) * 0x688;
 	}
 
-	return frameAddress;
+	return &rom[frameAddress];
 }
 
 static inline int picNum2BaseAddress(int picNum)
@@ -200,13 +211,14 @@ static inline int picNum2BaseAddress(int picNum)
 	return (picNum + 1) * 0x1000;
 }
 
-void convert(uint8_t framesBuffer[], uint8_t saveBuffer[], uint8_t pixelBuffer[], int picNum, int isHelloKittyRom)
+void convert(uint8_t rom[], uint8_t saveBuffer[], uint8_t pixelBuffer[], int picNum)
 {
 	int baseAddress = picNum2BaseAddress(picNum);
 	int frameNumber = saveBuffer[baseAddress + 0xfb0];
-	int frameAddress = getFrameAddress(frameNumber);
-	int xTile, yTile, tileAddress, tileNum, x, y, z;
+	uint8_t *frameAddress = getFrame(rom, frameNumber);
+	int xTile, yTile, tileNum, x, y, z;
 	uint8_t *tile;
+
 	for (yTile = 0; yTile < 14; ++yTile)
 	{
 		y = 16 + yTile*8;
@@ -217,35 +229,34 @@ void convert(uint8_t framesBuffer[], uint8_t saveBuffer[], uint8_t pixelBuffer[]
 			drawSpan(pixelBuffer, tile, x, y);
 		}
 
-		if (framesBuffer) {
+		if (rom) {
 			// Draw the sides of the frame
 			y = 16 + yTile*8;
 			for (z=0; z<4; ++z)
 			{
-				if (isHelloKittyRom == 1) {
-					tileNum = framesBuffer[HELLO_KITTY_FRAME_OFFSETS[frameNumber][1] + 0x50 + yTile*4 + z];
+				if (isHkRom(rom)) {
+					tileNum = rom[HELLO_KITTY_FRAME_OFFSETS[frameNumber][1] + 0x50 + yTile*4 + z];
 				} else {
-					tileNum = framesBuffer[frameAddress + 0x650 + yTile*4 + z];
+					tileNum = getFrame(rom, frameNumber)[0x650 + yTile*4 + z];
 				}
-				tile = framesBuffer + frameAddress + tileNum*16;
+				tile = getFrame(rom, frameNumber) +  tileNum*16;
 				x = ((z&1)?8:0) + ((z&2)?HEIGHT:0);
 				drawSpan(pixelBuffer, tile, x, y);
 			}
 		}
 	}
 
-	if (framesBuffer) {
+	if (rom) {
 		// Draw the top and bottom of the frame
 		for (xTile=0; xTile<20; ++xTile) for (z=0; z<4; ++z)
 		{
-			if (isHelloKittyRom == 1) {
-				tileNum = framesBuffer[HELLO_KITTY_FRAME_OFFSETS[frameNumber][1] + xTile + 0x14*z];
+			if (isHkRom(rom)) {
+				tileNum = rom[HELLO_KITTY_FRAME_OFFSETS[frameNumber][1] + xTile + 0x14*z];
 			} else {
-				tileNum = framesBuffer[frameAddress + 0x600 + xTile + 0x14*z];
+				tileNum = getFrame(rom, frameNumber)[0x600 + xTile + 0x14*z];
 			}
 
-			tileAddress = frameAddress + tileNum*16;
-			tile = framesBuffer + tileAddress;
+			tile = frameAddress + tileNum*16;
 			x = xTile*8;
 			y = ((z&1)?8:0) + ((z&2)?128:0);
 			drawSpan(pixelBuffer, tile, x, y);
@@ -289,24 +300,21 @@ void drawSpan(uint8_t pixelBuffer[], uint8_t *buffer, int x, int y) {
 	uint8_t lowBits, highBits;
 	uint8_t *p, *q;
 	p = pixelBuffer + (x/4) + y * ROW_SIZE;
-	for(q = p + ROW_SIZE * 8; p<q; p+=ROW_SIZE)
+	for (q = p + ROW_SIZE * 8; p<q; p+=ROW_SIZE)
 	{
 		lowBits = ~*buffer++;
 		highBits = ~*buffer++;
 		interleaved = interleaveBytes(lowBits, highBits);
 		p[1] = (uint8_t)(interleaved);
 		p[0] = (uint8_t)(interleaved >> 8);
-		//  *(uint16_t *)p = htons((uint16_t)interleaved);
 	}
 }
 
-void writeImageFile(uint8_t pixelBuffer[], int picNum)
+void writeImageFile(uint8_t pixelBuffer[], const char *filename)
 {
 	int y;
 	// open file
-	char name[7];
-	sprintf(name, "%d.png", picNum );
-	FILE *fp = fopen(name, "wb");
+	FILE *fp = fopen(filename, "wb");
 
 	png_structp png_ptr = png_create_write_struct
 		(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
@@ -361,4 +369,12 @@ void writeImageFile(uint8_t pixelBuffer[], int picNum)
 	if (row_pointers) free(row_pointers);
 
 	fclose(fp);
+}
+
+static void noreturn usage(void)
+{
+	fprintf(stderr, "usage: %s [-r rom.gb] -s save.sav\n",
+		__progname
+	);
+	exit(EXIT_FAILURE);
 }
