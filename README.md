@@ -1,28 +1,28 @@
 gbcamextract
 ============
 
-Extracts photos from Game Boy Camera saves. Frames can be preserved. Requires [libpng](http://www.libpng.org/pub/png/libpng.html).
+Extracts photos from Game Boy Camera / Pocket Camera saves. Frames can be preserved. The Hello Kitty camera is supported too.
 
 ## Usage
 
 ```console
-gbcamextract save.sav
+gbcamextract [-r rom.gb] -s save.sav
 ```
 
-This will produce 30 PNG files containing your photos. If you want the frames around your photos to be preserved, then you must provide a Game Boy Camera ROM, like so:
+This will produce 30 PNG files containing your photos. It is optional to specify the rom; this will allow the picture frames to be extracted too.
 
-```console
-gbcamextract save.sav camera.gb
-```
+## Building
 
+You will first need to install [libpng](http://www.libpng.org/pub/png/libpng.html).
 
-## Install
-
-You will first need to install [libpng](http://www.libpng.org/pub/png/libpng.html)
-
-Then, simply:
+Then, for Linux:
 ```console
 make
+```
+
+Or for Windows:
+```console
+mingw32-make -f Makefile.win
 ```
 
 
