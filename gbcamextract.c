@@ -23,7 +23,6 @@
 #include <stdint.h>
 #include <stdio.h>      // printf, fopen, fclose, fread
 #include <stdlib.h>     // malloc, EXIT_SUCCESS, EXIT_FAILURE, NULL
-#include <stdnoreturn.h>
 #include <string.h>     // strerror
 #include <zlib.h>
 #include "mapfile.h"
@@ -55,8 +54,8 @@ void drawSpan(uint8_t pixelBuffer[], uint8_t *buffer, int x, int y);
 void readData(uint8_t *fileName, uint8_t *buffer, int offset);
 bool isGbRom(const uint8_t data[0x150]);
 bool isHkRom(const uint8_t rom[0x150]);
-static void noreturn usage(void);
-static void noreturn version(void);
+static void usage(void);
+static void version(void);
 
 bool isGbRom(const uint8_t data[0x150])
 {
@@ -99,28 +98,39 @@ int main(int argc, char *argv[])
 	while ((rc = getopt(argc, argv, "s:r:V")) != -1)
 		switch (rc) {
 		case 's':
-			if (filename_save)
+			if (filename_save) {
 				usage();
+				return EXIT_FAILURE;
+			}
 			filename_save = optarg;
 			break;
 		case 'r':
-			if (filename_rom)
+			if (filename_rom) {
 				usage();
+				return EXIT_FAILURE;
+			}
 			filename_rom = optarg;
 			break;
 		case 'V':
 			version();
+			return EXIT_FAILURE;
 			break;
 		default:
 			usage();
+			return EXIT_FAILURE;
+			break;
 		}
 	argc -= optind;
 	argv += optind;
-	if (*argv != NULL)
+	if (*argv != NULL) {
 		usage();
+		return EXIT_FAILURE;
+	}
 
-	if (!filename_save)
+	if (!filename_save) {
 		usage();
+		return EXIT_FAILURE;
+	}
 
 	// Open the save file.
 	mSave = MappedFile_Open(filename_save, false);
@@ -375,7 +385,7 @@ void writeImageFile(uint8_t pixelBuffer[], const char *filename)
 	fclose(fp);
 }
 
-static void noreturn usage(void)
+static void usage(void)
 {
 	fprintf(stderr, "usage: %s [-r rom.gb] -s save.sav\n",
 		__progname
@@ -383,7 +393,7 @@ static void noreturn usage(void)
 	exit(EXIT_FAILURE);
 }
 
-static void noreturn version(void)
+static void version(void)
 {
 	fprintf(stderr, "%s %s\n", __progname, __progversion);
 	exit(EXIT_FAILURE);
