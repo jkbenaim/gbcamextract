@@ -206,6 +206,7 @@ struct MappedFile_s MappedFile_Create(char *filename, size_t size)
 
 out_close:
 	close(m._fd);
+	m._fd = -1;
 out_error:
 	m.size = 0;
 	m.data = NULL;
@@ -245,6 +246,7 @@ struct MappedFile_s MappedFile_Open(char *filename, bool writable)
 
 out_close:
 	close(m._fd);
+	m._fd = -1;
 out_error:
 	m.size = 0;
 	m.data = NULL;
